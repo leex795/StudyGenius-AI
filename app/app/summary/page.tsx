@@ -1,0 +1,1 @@
+import { StudyTool } from "../../../components/StudyTool"; export default function Page(){return <StudyTool mode="summary" />}

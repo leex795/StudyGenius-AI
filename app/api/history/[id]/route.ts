@@ -1,0 +1,2 @@
+import { NextResponse } from "next/server"; import { requireUser } from "../../../../lib/auth"; import { db } from "../../../../lib/db";
+export async function GET(_req:Request,{params}:{params:Promise<{id:string}>}){try{const u=await requireUser();const {id}=await params;const item=await db.studyItem.findFirst({where:{id,userId:u.id}});if(!item)return NextResponse.json({error:"Not found"},{status:404});return NextResponse.json({item})}catch{return NextResponse.json({error:"Unauthorized"},{status:401})}}

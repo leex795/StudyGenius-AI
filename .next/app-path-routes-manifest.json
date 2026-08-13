@@ -1,0 +1,19 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/api/auth/me/route": "/api/auth/me",
+  "/api/auth/signup/route": "/api/auth/signup",
+  "/api/auth/logout/route": "/api/auth/logout",
+  "/api/auth/login/route": "/api/auth/login",
+  "/api/history/[id]/route": "/api/history/[id]",
+  "/api/study/explain/route": "/api/study/explain",
+  "/api/health/route": "/api/health",
+  "/api/history/route": "/api/history",
+  "/api/study/flashcards/route": "/api/study/flashcards",
+  "/api/study/summary/route": "/api/study/summary",
+  "/page": "/",
+  "/login/page": "/login",
+  "/app/flashcards/page": "/app/flashcards",
+  "/app/explain/page": "/app/explain",
+  "/app/page": "/app",
+  "/app/summary/page": "/app/summary"
+}

@@ -1,0 +1,10 @@
+{
+  "name":"StudyGenius AI",
+  "short_name":"StudyGenius",
+  "start_url":"/app",
+  "display":"standalone",
+  "background_color":"#07100d",
+  "theme_color":"#07100d",
+  "description":"Turn notes into flashcards, effective summaries and simple explanations.",
+  "icons":[]
+}
