@@ -1,20 +1,21 @@
-import OpenAI from "openai";
 import { z } from "zod";
 
 export const MAX_INPUT = 120000;
 
-function getClient() {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
+
+function getConfig() {
+  const apiKey = process.env.GROQ_API_KEY?.trim();
 
   if (!apiKey) {
     throw new Error("AI_NOT_CONFIGURED");
   }
 
-  return new OpenAI({
+  return {
     apiKey,
-    timeout: 60000,
-    maxRetries: 2,
-  });
+    model: process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL,
+  };
 }
 
 function cleanText(text: string) {
@@ -91,12 +92,12 @@ FLASHCARD QUALITY:
 - Do not make several cards ask essentially the same question.
 - Prioritize important concepts over tiny unimportant details.
 - Include definitions, facts, processes, steps, causes/effects, comparisons, formulas and examples when present.
-- Make questions stand alone so a student can understand them without seeing the original notes.
+- Make questions stand alone.
 - Keep answers concise but complete.
 - Add a short explanation when it helps understanding.
-- Do not create information that is absent from the source.
+- Do not create information absent from the source.
 
-Return ONLY valid JSON in exactly this shape:
+Return ONLY valid JSON:
 
 {
   "cards": [
@@ -134,13 +135,11 @@ Keep it compact and easy to scan.
     medium: `
 Make this a MEDIUM study summary.
 Cover the major concepts and important supporting details.
-It should be useful for normal revision without becoming unnecessarily long.
 `,
     detailed: `
 Make this a DETAILED study summary.
-Cover the important concepts, definitions, relationships, processes,
+Cover important concepts, definitions, relationships, processes,
 examples and supporting details needed for strong understanding.
-Do not simply copy the source.
 `,
   };
 
@@ -156,16 +155,15 @@ The summary should:
 - remove repetition and filler
 - preserve important relationships
 - use simple language where possible
-- identify important terms and their meanings
+- identify important terms and meanings
 - remain faithful to the supplied material
 
-Return ONLY valid JSON in exactly this shape:
+Return ONLY valid JSON:
 
 {
   "title": "Useful study title",
   "summary": "Study-friendly summary",
   "key_points": [
-    "Important point",
     "Important point"
   ],
   "terms": [
@@ -189,31 +187,25 @@ ${BASE}
 
 Explain the student's topic to someone who knows almost nothing about it.
 
-Use the following teaching method:
-
 1. SIMPLE:
-Explain the idea using very easy words.
-Imagine you are teaching a young beginner.
-Do NOT use unnecessary jargon.
+Explain using very easy words.
 
 2. ANALOGY:
-Give a familiar everyday comparison that makes the idea easier to picture.
-Make sure the analogy does not introduce an incorrect scientific or factual idea.
+Give a familiar everyday comparison.
 
 3. EXAMPLE:
 Give one concrete example.
 
 4. REMEMBER:
-Give one short memorable sentence the student can use to recall the main idea.
+Give one short memorable sentence.
 
 IMPORTANT:
-- "Simple" must still be accurate.
-- If a technical term is necessary, define it immediately.
+- Stay accurate.
+- Define necessary technical terms.
 - Break complicated processes into small steps.
-- Do not talk down to the student.
 - Do not invent information.
 
-Return ONLY valid JSON in exactly this shape:
+Return ONLY valid JSON:
 
 {
   "simple": "Very easy explanation",
@@ -227,26 +219,66 @@ Return ONLY valid JSON in exactly this shape:
 }
 
 async function jsonRequest(instructions: string, input: string) {
-  const client = getClient();
+  const { apiKey, model } = getConfig();
 
   try {
-    const response = await client.responses.create({
-      model: process.env.OPENAI_MODEL || "gpt-5",
-      instructions,
-      input,
-      text: {
-        format: {
-          type: "json_object",
-        },
-      },
-      store: false,
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
 
-    if (!response.output_text?.trim()) {
+    let response: Response;
+
+    try {
+      response = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "system",
+              content: instructions,
+            },
+            {
+              role: "user",
+              content: input,
+            },
+          ],
+          temperature: 0.2,
+          response_format: {
+            type: "json_object",
+          },
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const body = await response.text();
+
+    let data: any;
+
+    try {
+      data = JSON.parse(body);
+    } catch {
+      throw new Error("AI_INVALID_RESPONSE");
+    }
+
+    if (!response.ok) {
+      throw new Error("AI_REQUEST_FAILED");
+    }
+
+    const outputText =
+      data?.choices?.[0]?.message?.content?.trim() || "";
+
+    if (!outputText) {
       throw new Error("AI_EMPTY_RESPONSE");
     }
 
-    return JSON.parse(response.output_text);
+    return JSON.parse(outputText);
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new Error("AI_INVALID_RESPONSE");
@@ -255,7 +287,9 @@ async function jsonRequest(instructions: string, input: string) {
     if (error instanceof Error) {
       if (
         error.message === "AI_NOT_CONFIGURED" ||
-        error.message === "AI_EMPTY_RESPONSE"
+        error.message === "AI_EMPTY_RESPONSE" ||
+        error.message === "AI_INVALID_RESPONSE" ||
+        error.message === "AI_REQUEST_FAILED"
       ) {
         throw error;
       }
